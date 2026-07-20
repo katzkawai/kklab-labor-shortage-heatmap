@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日本の職業別 人手不足ヒートマップ</title>
+<meta name="description" content="厚生労働省「一般職業紹介状況」の職業別有効求人倍率をもとに、日本でどの職業が人手不足かをヒートマップで可視化。">
+<style>
+  :root {
+    --max-ratio: 8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, "Noto Sans JP", sans-serif;
+    background: #f4f6f8;
+    color: #222;
+    line-height: 1.6;
+  }
+  header {
+    background: #1f2a44;
+    color: #fff;
+    padding: 2rem 1rem 1.5rem;
+    text-align: center;
+  }
+  header h1 { margin: 0 0 .4rem; font-size: 1.5rem; }
+  header p { margin: 0; opacity: .85; font-size: .9rem; }
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem;
+    margin: 1rem 0 1.5rem;
+  }
+  .controls label { font-weight: bold; font-size: .95rem; }
+  .year-btn {
+    border: 1px solid #1f2a44;
+    background: #fff;
+    color: #1f2a44;
+    padding: .35rem .9rem;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: .9rem;
+  }
+  .year-btn.active {
+    background: #1f2a44;
+    color: #fff;
+  }
+  section { margin-bottom: 2.5rem; }
+  section h2 {
+    font-size: 1.15rem;
+    border-left: 5px solid #c0392b;
+    padding-left: .6rem;
+    margin: 0 0 .4rem;
+  }
+  section .note { font-size: .8rem; color: #666; margin: 0 0 .8rem; }
+  .heatmap {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: .6rem;
+  }
+  .cell {
+    border-radius: 8px;
+    padding: .8rem .9rem;
+    min-height: 92px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+    cursor: default;
+    transition: transform .08s ease;
+  }
+  .cell:hover { transform: translateY(-2px); }
+  .cell .name { font-size: .88rem; font-weight: bold; line-height: 1.35; }
+  .cell .ratio { font-size: 1.35rem; font-weight: bold; }
+  .cell .sub { font-size: .7rem; opacity: .85; }
+
+  /* カラースケールの凡例 */
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: .25rem 0 1.25rem;
+    font-size: .75rem;
+    color: #555;
+  }
+  .legend .bar {
+    flex: 0 0 220px;
+    height: 14px;
+    border-radius: 7px;
+    background: linear-gradient(to right, #2166ac, #67a9cf, #d1e5f0, #f7f7f7, #fddbc7, #ef8a62, #b2182b);
+    border: 1px solid #ccc;
+  }
+  .explain {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    font-size: .85rem;
+  }
+  .explain h3 { margin: 0 0 .5rem; font-size: .95rem; }
+  .explain ul { margin: .25rem 0 .75rem; padding-left: 1.2rem; }
+  footer {
+    text-align: center;
+    font-size: .75rem;
+    color: #777;
+    padding: 1.5rem 1rem 2.5rem;
+  }
+  footer a { color: #1f2a44; }
+</style>
+</head>
+<body>
+<header>
+  <h1>日本の職業別 人手不足ヒートマップ</h1>
+  <p>厚生労働省「一般職業紹介状況」職業別有効求人倍率（パートタイムを除く常用）に基づく可視化</p>
+</header>
+
+<main>
+  <div class="controls">
+    <label>年度を選択:</label>
+    <button class="year-btn" data-year="2022">2022年度</button>
+    <button class="year-btn" data-year="2023">2023年度</button>
+    <button class="year-btn active" data-year="2024">2024年度</button>
+  </div>
+
+  <div class="legend">
+    <span>人余り<br>0倍</span>
+    <div class="bar"></div>
+    <span>不足<br>8倍以上</span>
+  </div>
+
+  <section>
+    <h2>職業大分類別 有効求人倍率</h2>
+    <p class="note">求職者1人あたりの求人数。1倍を大きく超えるほど人手不足が深刻（赤）、1倍未満は求職過多（青）。</p>
+    <div class="heatmap" id="majorHeatmap"></div>
+  </section>
+
+  <section>
+    <h2>「専門的・技術的職業従事者」の内訳（中分類相当）</h2>
+    <p class="note">専門・技術職の中でも職種による差が大きいため、内訳を個別に表示。</p>
+    <div class="heatmap" id="proHeatmap"></div>
+  </section>
+
+  <section class="explain">
+    <h3>読み方と注意点</h3>
+    <ul>
+      <li><strong>有効求人倍率</strong> = 月間有効求人数 ÷ 月間有効求職者数（ハローワーク経由のデータ。民間転職サイトの求人は含まない）。</li>
+      <li><strong>1倍を超える</strong>と求人が求職者を上回る「売り手市場」＝人手不足傾向。5倍超の保安職業・建設・採掘などは慢性的な不足状態。</li>
+      <li><strong>介護関係職種</strong>は「福祉施設指導専門員」「その他の社会福祉専門職業従事者」「家政婦（夫）、家事手伝い」「介護サービス職業従事者」の合算。</li>
+      <li>倍率が高くても求人の絶対数が少ない職種（例: 保安職業）がある点に注意。</li>
+    </ul>
+    <p>出典: 厚生労働省「<a href="https://www.mhlw.go.jp/toukei/list/114-1.html" target="_blank" rel="noopener">一般職業紹介状況（職業安定業務統計）</a>」第21表-14「有効求人倍率（パート除く常用）」を加工して作成（<a href="https://www.r-agent.com/guide/start/32493/" target="_blank" rel="noopener">リクルートエージェントの集計</a>を参照）。</p>
+  </section>
+</main>
+
+<footer>
+  <p>このページは公開統計にもとづく個人の可視化プロジェクトです。</p>
+</footer>
+
+<script>
+// 厚生労働省「一般職業紹介状況」第21表-14 有効求人倍率（パート除く常用）
+// 出典: https://www.r-agent.com/guide/start/32493/ （2022〜2024年度）
+const YEARS = ["2022", "2023", "2024"];
+
+const majorCategories = [
+  { name: "保安職業従事者", sub: "警備員・自衛官・警察官・消防員など", values: [6.80, 7.08, 6.95] },
+  { name: "建設・採掘従事者", sub: "建設躯体工事・土木作業員など", values: [5.71, 5.83, 5.74] },
+  { name: "介護関係職種", sub: "介護サービス職業従事者などの合算", values: [3.54, 3.79, 3.87] },
+  { name: "サービス職業従事者", sub: "飲食・接客・理美容など", values: [2.58, 2.69, 2.63] },
+  { name: "輸送・機械運転従事者", sub: "トラック運転者など", values: [2.20, 2.33, 2.34] },
+  { name: "販売従事者", sub: "小売・営業など", values: [1.88, 2.11, 2.19] },
+  { name: "専門的・技術的職業従事者", sub: "技術者・医療・福祉専門職など", values: [1.94, 1.92, 1.99] },
+  { name: "生産工程従事者", sub: "製造・組立・加工など", values: [1.99, 1.77, 1.67] },
+  { name: "職業計（全体平均）", sub: "全職業の平均", values: [1.23, 1.23, 1.22], overall: true },
+  { name: "農林漁業従事者", sub: "", values: [1.22, 1.15, 1.14] },
+  { name: "管理的職業従事者", sub: "管理職など", values: [0.98, 1.16, 1.09] },
+  { name: "運搬・清掃・包装等従事者", sub: "", values: [0.70, 0.72, 0.69] },
+  { name: "事務従事者", sub: "一般事務・経理など", values: [0.42, 0.43, 0.43] },
+];
+
+const proCategories = [
+  { name: "その他の技術者", sub: "分類外の技術職", values: [2.34, 2.21, 8.51] },
+  { name: "建築・土木・測量技術者", sub: "施工管理など", values: [6.53, 6.61, 6.71] },
+  { name: "医師・歯科医師・獣医師・薬剤師", sub: "", values: [2.95, 3.08, 3.17] },
+  { name: "医療技術者", sub: "臨床検査技師・放射線技師など", values: [2.96, 3.03, 3.10] },
+  { name: "社会福祉専門職業従事者", sub: "社会福祉士・介護支援専門員など", values: [3.19, 3.02, 2.95] },
+  { name: "製造技術者（開発）", sub: "", values: [2.09, 2.32, 2.41] },
+  { name: "保健師・助産師・看護師", sub: "", values: [2.40, 2.24, 2.33] },
+  { name: "その他の保健医療従事者", sub: "", values: [1.91, 2.04, 2.15] },
+  { name: "情報処理・通信技術者", sub: "ITエンジニアなど", values: [1.64, 1.67, 1.69] },
+  { name: "製造技術者（開発を除く）", sub: "", values: [0.90, 0.89, 0.89] },
+  { name: "その他の専門的職業", sub: "", values: [0.61, 0.63, 0.61] },
+  { name: "美術家・デザイナー・写真家・映像撮影者", sub: "", values: [0.19, 0.17, 0.16] },
+];
+
+// 0 → 青 (#2166ac)、1 → 白 (#f7f7f7)、8+ → 赤 (#b2182b) の発散スケール
+const STOPS = [
+  [0.0, [33, 102, 172]],
+  [0.5, [103, 169, 207]],
+  [0.8, [209, 229, 240]],
+  [1.0, [247, 247, 247]],
+  [2.0, [253, 219, 199]],
+  [4.0, [239, 138, 98]],
+  [8.0, [178, 24, 43]],
+];
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function colorFor(ratio) {
+  const v = Math.max(0, Math.min(8, ratio));
+  for (let i = 1; i < STOPS.length; i++) {
+    if (v <= STOPS[i][0]) {
+      const [v0, c0] = STOPS[i - 1];
+      const [v1, c1] = STOPS[i];
+      const t = (v - v0) / (v1 - v0);
+      const c = c0.map((x, k) => Math.round(lerp(x, c1[k], t)));
+      return `rgb(${c[0]},${c[1]},${c[2]})`;
+    }
+  }
+  return "rgb(178,24,43)";
+}
+
+function textColorFor(ratio) {
+  // 背景が濃い（極端）なら白文字、中間なら黒文字
+  const v = Math.max(0, Math.min(8, ratio));
+  const d = Math.abs(v - 1) / 7; // 0..1
+  return d > 0.35 ? "#fff" : "#222";
+}
+
+function render(elId, data, yearIdx) {
+  const el = document.getElementById(elId);
+  el.innerHTML = "";
+  data.forEach(d => {
+    const ratio = d.values[yearIdx];
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.style.background = colorFor(ratio);
+    cell.style.color = textColorFor(ratio);
+    cell.title = `${d.name}: ${ratio.toFixed(2)}倍`;
+    cell.innerHTML =
+      `<span class="name">${d.name}</span>` +
+      `<span class="ratio">${ratio.toFixed(2)}<span style="font-size:.8rem">倍</span></span>` +
+      (d.sub ? `<span class="sub">${d.sub}</span>` : `<span class="sub">&nbsp;</span>`);
+    if (d.overall) {
+      cell.style.outline = "2px dashed #555";
+      cell.style.outlineOffset = "-2px";
+    }
+    el.appendChild(cell);
+  });
+}
+
+let yearIdx = 2; // 2024年度が初期表示
+function update() {
+  render("majorHeatmap", majorCategories, yearIdx);
+  render("proHeatmap", proCategories, yearIdx);
+  document.querySelectorAll(".year-btn").forEach(b => {
+    b.classList.toggle("active", YEARS.indexOf(b.dataset.year) === yearIdx);
+  });
+}
+document.querySelectorAll(".year-btn").forEach(b => {
+  b.addEventListener("click", () => { yearIdx = YEARS.indexOf(b.dataset.year); update(); });
+});
+update();
+</script>
+</body>
+</html>
