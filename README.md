@@ -67,7 +67,18 @@ python3 -m http.server 8000
 
 ## データの更新方法
 
-`index.html` 内の `<script>` 冒頭にある `majorCategories` / `proCategories` の
-`values` 配列（`[2022年度, 2023年度, 2024年度, 2026年5月]` の順）を、最新の公表値で更新してください。
-期間を増やす場合は `YEARS` 配列と期間ボタンも合わせて追加します。
-月次データは厚生労働省の毎月の報道発表「参考統計表7-2 職業中分類別 常用（除パート）」から取得できます。
+**自動更新（GitHub Actions）**: `.github/workflows/update-data.yml` が毎月2日 10:23 JST に
+`scripts/update_data.py` を実行し、厚生労働省の最新報道発表（前月分・月末公表）を取り込みます。
+新しい月のデータがあれば `index.html`（YEARS・各カテゴリの values・出典）と README を更新して
+自動で commit & push され、期間タブ（月次ボタン）が追加されます。Actions タブから手動実行
+（workflow_dispatch）も可能です。
+
+手動で更新する場合は、リポジトリ直下で以下を実行します（要 `pdftotext` / poppler-utils）:
+
+```bash
+python3 scripts/update_data.py          # 最新月を取得して反映
+python3 scripts/update_data.py --check  # 取得・解析の確認のみ（ファイル変更なし）
+```
+
+データ本体は `index.html` 内の `<script>` 冒頭にある `YEARS` 配列と
+`majorCategories` / `proCategories` の `values` 配列（YEARS と同順）です。

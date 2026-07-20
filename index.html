@@ -122,12 +122,8 @@
 </header>
 
 <main>
-  <div class="controls">
+  <div class="controls" id="yearControls">
     <label>期間を選択:</label>
-    <button class="year-btn" data-year="2022">2022年度</button>
-    <button class="year-btn" data-year="2023">2023年度</button>
-    <button class="year-btn" data-year="2024">2024年度</button>
-    <button class="year-btn active" data-year="2026-05">2026年5月（月次）</button>
   </div>
 
   <div class="legend">
@@ -139,7 +135,7 @@
   <section>
     <h2>職業大分類別 有効求人倍率</h2>
     <p class="note">求職者1人あたりの求人数。1倍を大きく超えるほど人手不足が深刻（赤）、1倍未満は求職過多（青）。<br>
-    ※「2026年5月（月次）」は単月の実数で、年度平均とは直接比較できません。同月の「介護関係職種」は介護サービス職業従事者のみの値です。</p>
+    ※「（月次）」の期間は単月の実数で、年度平均とは直接比較できません。月次の「介護関係職種」は介護サービス職業従事者のみの値です。</p>
     <div class="heatmap" id="majorHeatmap"></div>
   </section>
 
@@ -162,13 +158,13 @@
     <ul>
       <li><strong>有効求人倍率</strong> = 月間有効求人数 ÷ 月間有効求職者数（ハローワーク経由のデータ。民間転職サイトの求人は含まない）。</li>
       <li><strong>1倍を超える</strong>と求人が求職者を上回る「売り手市場」＝人手不足傾向。5倍超の保安職業・建設・採掘などは慢性的な不足状態。</li>
-      <li><strong>介護関係職種</strong>は「福祉施設指導専門員」「その他の社会福祉専門職業従事者」「家政婦（夫）、家事手伝い」「介護サービス職業従事者」の合算（2026年5月のみ「介護サービス職業従事者」の値）。</li>
-      <li><strong>2026年5月（月次）</strong>は単月の実数値。年度平均とは季節変動の影響が異なるため、厳密な比較には注意。</li>
+      <li><strong>介護関係職種</strong>は「福祉施設指導専門員」「その他の社会福祉専門職業従事者」「家政婦（夫）、家事手伝い」「介護サービス職業従事者」の合算（月次のみ「介護サービス職業従事者」の値）。</li>
+      <li><strong>月次データ</strong>は単月の実数値。年度平均とは季節変動の影響が異なるため、厳密な比較には注意。</li>
       <li>倍率が高くても求人の絶対数が少ない職種（例: 保安職業）がある点に注意。</li>
     </ul>
     <p>出典: 厚生労働省「<a href="https://www.mhlw.go.jp/toukei/list/114-1.html" target="_blank" rel="noopener">一般職業紹介状況（職業安定業務統計）</a>」を加工して作成。<br>
     2022〜2024年度: 第21表-14「有効求人倍率（パート除く常用）」（<a href="https://www.r-agent.com/guide/start/32493/" target="_blank" rel="noopener">リクルートエージェントの集計</a>を参照）。<br>
-    2026年5月: 「<a href="https://www.mhlw.go.jp/stf/newpage_74004.html" target="_blank" rel="noopener">一般職業紹介状況（令和8年5月分）</a>」（2026年6月30日公表）参考統計表7-2 職業中分類別 常用（除パート）。</p>
+    <span id="monthly-source">月次（最新: 2026年5月分）: 「<a href="https://www.mhlw.go.jp/stf/newpage_74004.html" target="_blank" rel="noopener">一般職業紹介状況（令和8年5月分）</a>」（2026年6月30日公表）参考統計表7-2 職業中分類別 常用（除パート）。</span></p>
   </section>
 </main>
 
@@ -179,9 +175,9 @@
 <script>
 // 厚生労働省「一般職業紹介状況」有効求人倍率（パート除く常用）
 // 2022〜2024年度（年度平均）: 第21表-14、出典 https://www.r-agent.com/guide/start/32493/
-// 2026年5月（単月・実数）: 参考統計表7-2「職業中分類別 常用（除パート）」、
-//   出典 https://www.mhlw.go.jp/stf/newpage_74004.html （2026年6月30日公表）
-// values の並びは [2022年度, 2023年度, 2024年度, 2026年5月]
+// 月次（単月・実数）: 報道発表の参考統計表7-2「職業中分類別 常用（除パート）」。
+//   最新月の出典はページ下部「読み方と注意点」の出典欄を参照（scripts/update_data.py が月次更新）
+// values の並びは YEARS と同順
 const YEARS = ["2022", "2023", "2024", "2026-05"];
 
 const majorCategories = [
@@ -271,7 +267,27 @@ function render(elId, data, yearIdx) {
   });
 }
 
-let yearIdx = 3; // 最新（2026年5月）を初期表示
+// 期間キー → 表示ラベル（"2024" → 2024年度、"2026-05" → 2026年5月（月次））
+function yearLabel(key) {
+  if (key.includes("-")) {
+    const [y, m] = key.split("-");
+    return `${Number(y)}年${Number(m)}月（月次）`;
+  }
+  return `${key}年度`;
+}
+
+// 期間ボタンを YEARS から動的生成
+let yearIdx = YEARS.length - 1; // 最新期間を初期表示
+const controls = document.getElementById("yearControls");
+YEARS.forEach((key, i) => {
+  const b = document.createElement("button");
+  b.className = "year-btn" + (i === yearIdx ? " active" : "");
+  b.dataset.year = key;
+  b.textContent = yearLabel(key);
+  b.addEventListener("click", () => { yearIdx = i; update(); });
+  controls.appendChild(b);
+});
+
 function update() {
   render("majorHeatmap", majorCategories, yearIdx);
   render("proHeatmap", proCategories, yearIdx);
@@ -279,9 +295,6 @@ function update() {
     b.classList.toggle("active", YEARS.indexOf(b.dataset.year) === yearIdx);
   });
 }
-document.querySelectorAll(".year-btn").forEach(b => {
-  b.addEventListener("click", () => { yearIdx = YEARS.indexOf(b.dataset.year); update(); });
-});
 update();
 </script>
 </body>
